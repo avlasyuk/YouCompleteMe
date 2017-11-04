@@ -27,57 +27,44 @@ endfunction
 if exists( "g:loaded_youcompleteme" )
   call s:restore_cpo()
   finish
-elseif v:version < 703 || (v:version == 703 && !has('patch598'))
+elseif v:version < 704 || (v:version == 704 && !has( 'patch1578' ))
   echohl WarningMsg |
-        \ echomsg "YouCompleteMe unavailable: requires Vim 7.3.598+" |
+        \ echomsg "YouCompleteMe unavailable: requires Vim 7.4.1578+." |
         \ echohl None
+  if v:version == 704 && has( 'patch8056' )
+    " Very very special case for users of the default Vim on macOS. For some
+    " reason, that version of Vim contains a completely arbitrary (presumably
+    " custom) patch '8056', which fools users (but not our has( 'patch1578' )
+    " check) into thinking they have a sufficiently new Vim. In fact they do
+    " not and YCM fails to initialise. So we give them a more specific warning.
+    echohl WarningMsg
+          \ | echomsg
+          \ "Info: You appear to be running the default system Vim on macOS. "
+          \ . "It reports as patch 8056, but it is really older than 1578. "
+          \ . "Please consider MacVim, homebrew Vim or a self-built Vim that "
+          \ . "satisfies the minimum requirement."
+          \ | echohl None
+  endif
   call s:restore_cpo()
   finish
-elseif !has( 'python' )
+elseif !has( 'timers' )
   echohl WarningMsg |
         \ echomsg "YouCompleteMe unavailable: requires Vim compiled with " .
-        \ "Python 2.x support" |
+        \ "the timers feature." |
         \ echohl None
   call s:restore_cpo()
   finish
-endif
-
-let s:script_folder_path = escape( expand( '<sfile>:p:h' ), '\' )
-let s:python_folder_path = s:script_folder_path . '/../python/'
-let s:ycmd_folder_path = s:script_folder_path . '/../third_party/ycmd/'
-
-function! s:YcmLibsPresentIn( path_prefix )
-  if filereadable(a:path_prefix . 'ycm_client_support.so') &&
-        \ filereadable(a:path_prefix . 'ycm_core.so')
-    return 1
-  elseif filereadable(a:path_prefix . 'ycm_client_support.pyd') &&
-        \ filereadable(a:path_prefix . 'ycm_core.pyd')
-    return 1
-  elseif filereadable(a:path_prefix . 'ycm_client_support.dll') &&
-        \ filereadable(a:path_prefix . 'ycm_core.dll')
-    return 1
-  endif
-  return 0
-endfunction
-
-if s:YcmLibsPresentIn( s:python_folder_path )
+elseif !has( 'python' ) && !has( 'python3' )
   echohl WarningMsg |
-        \ echomsg "YCM libraries found in old YouCompleteMe/python location; " .
-        \ "please RECOMPILE YCM." |
+        \ echomsg "YouCompleteMe unavailable: requires Vim compiled with " .
+        \ "Python (2.6+ or 3.3+) support." |
         \ echohl None
   call s:restore_cpo()
   finish
-endif
-
-let g:ycm_check_if_ycm_core_present =
-      \ get( g:, 'ycm_check_if_ycm_core_present', 1 )
-
-if g:ycm_check_if_ycm_core_present &&
-      \ !s:YcmLibsPresentIn( s:ycmd_folder_path )
+elseif &encoding !~? 'utf-\?8'
   echohl WarningMsg |
-        \ echomsg "ycm_client_support.[so|pyd|dll] and " .
-        \ "ycm_core.[so|pyd|dll] not detected; you need to compile " .
-        \ "YCM before using it. Read the docs!" |
+        \ echomsg "YouCompleteMe unavailable: requires UTF-8 encoding. " .
+        \ "Put the line 'set encoding=utf-8' in your vimrc." |
         \ echohl None
   call s:restore_cpo()
   finish
@@ -85,14 +72,11 @@ endif
 
 let g:loaded_youcompleteme = 1
 
-" NOTE: Most defaults are in default_settings.json. They are loaded into Vim
-" global with the 'ycm_' prefix if such a key does not already exist; thus, the
-" user can override the defaults.
+" NOTE: Most defaults are in third_party/ycmd/ycmd/default_settings.json. They
+" are loaded into Vim globals with the 'ycm_' prefix if such a key does not
+" already exist; thus, the user can override the defaults.
 " The only defaults that are here are the ones that are only relevant to the YCM
-" Vim client and not the server.
-
-let g:ycm_allow_changing_updatetime =
-      \ get( g:, 'ycm_allow_changing_updatetime', 1 )
+" Vim client and not the ycmd server.
 
 let g:ycm_open_loclist_on_ycm_diags =
       \ get( g:, 'ycm_open_loclist_on_ycm_diags', 1 )
@@ -112,6 +96,9 @@ let g:ycm_key_list_select_completion =
 let g:ycm_key_list_previous_completion =
       \ get( g:, 'ycm_key_list_previous_completion', ['<S-TAB>', '<Up>'] )
 
+let g:ycm_key_list_stop_completion =
+      \ get( g:, 'ycm_key_list_stop_completion', ['<C-y>'] )
+
 let g:ycm_key_invoke_completion =
       \ get( g:, 'ycm_key_invoke_completion', '<C-Space>' )
 
@@ -121,21 +108,23 @@ let g:ycm_key_detailed_diagnostics =
 let g:ycm_cache_omnifunc =
       \ get( g:, 'ycm_cache_omnifunc', 1 )
 
-let g:ycm_server_log_level =
-      \ get( g:, 'ycm_server_log_level', 'info' )
+let g:ycm_log_level =
+      \ get( g:, 'ycm_log_level',
+      \ get( g:, 'ycm_server_log_level', 'info' ) )
 
-let g:ycm_server_keep_logfiles =
-      \ get( g:, 'ycm_server_keep_logfiles', 0 )
+let g:ycm_keep_logfiles =
+      \ get( g:, 'ycm_keep_logfiles',
+      \ get( g:, 'ycm_server_keep_logfiles', 0 ) )
 
 let g:ycm_extra_conf_vim_data =
       \ get( g:, 'ycm_extra_conf_vim_data', [] )
 
-let g:ycm_path_to_python_interpreter =
-      \ get( g:, 'ycm_path_to_python_interpreter', '' )
+let g:ycm_server_python_interpreter =
+      \ get( g:, 'ycm_server_python_interpreter',
+      \ get( g:, 'ycm_path_to_python_interpreter', '' ) )
 
 let g:ycm_show_diagnostics_ui =
-      \ get( g:, 'ycm_show_diagnostics_ui',
-      \ get( g:, 'ycm_register_as_syntastic_checker', 1 ) )
+      \ get( g:, 'ycm_show_diagnostics_ui', 1 )
 
 let g:ycm_enable_diagnostic_signs =
       \ get( g:, 'ycm_enable_diagnostic_signs',
@@ -167,12 +156,17 @@ let g:ycm_goto_buffer_command =
 let g:ycm_disable_for_files_larger_than_kb =
       \ get( g:, 'ycm_disable_for_files_larger_than_kb', 1000 )
 
-" On-demand loading. Let's use the autoload folder and not slow down vim's
-" startup procedure.
-augroup youcompletemeStart
-  autocmd!
-  autocmd VimEnter * call youcompleteme#Enable()
-augroup END
+if has( 'vim_starting' ) " Loading at startup.
+  " We defer loading until after VimEnter to allow the gui to fork (see
+  " `:h gui-fork`) and avoid a deadlock situation, as explained here:
+  " https://github.com/Valloric/YouCompleteMe/pull/2473#issuecomment-267716136
+  augroup youcompletemeStart
+    autocmd!
+    autocmd VimEnter * call youcompleteme#Enable()
+  augroup END
+else " Manual loading with :packadd.
+  call youcompleteme#Enable()
+endif
 
 " This is basic vim plugin boilerplate
 call s:restore_cpo()

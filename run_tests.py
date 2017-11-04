@@ -13,6 +13,17 @@ python_path = []
 for folder in os.listdir( DIR_OF_THIRD_PARTY ):
   python_path.append( p.abspath( p.join( DIR_OF_THIRD_PARTY, folder ) ) )
 for folder in os.listdir( DIR_OF_YCMD_THIRD_PARTY ):
+  # We skip python-future because it needs to be inserted in sys.path AFTER
+  # the standard library imports but we can't do that with PYTHONPATH because
+  # the std lib paths are always appended to PYTHONPATH. We do it correctly in
+  # prod in ycmd/utils.py because we have access to the right sys.path.
+  # So for dev, we rely on python-future being installed correctly with
+  #   pip install -r test_requirements.txt
+  #
+  # Pip knows how to install this correctly so that it doesn't matter where in
+  # sys.path the path is.
+  if folder == 'python-future':
+    continue
   python_path.append( p.abspath( p.join( DIR_OF_YCMD_THIRD_PARTY, folder ) ) )
 if os.environ.get( 'PYTHONPATH' ):
   python_path.append( os.environ[ 'PYTHONPATH' ] )
@@ -23,12 +34,13 @@ sys.path.insert( 1, p.abspath( p.join( DIR_OF_YCMD_THIRD_PARTY,
 
 import argparse
 
+
 def RunFlake8():
   print( 'Running flake8' )
   subprocess.check_call( [
-    'flake8',
-    '--select=F,C9',
-    '--max-complexity=10',
+    sys.executable,
+    # __main__ is required on Python 2.6.
+    '-m', 'flake8.__main__',
     p.join( DIR_OF_THIS_SCRIPT, 'python' )
   ] )
 
@@ -36,9 +48,18 @@ def RunFlake8():
 def ParseArguments():
   parser = argparse.ArgumentParser()
   parser.add_argument( '--skip-build', action = 'store_true',
-                       help = 'Do not build ycmd before testing.' )
+                       help = 'Do not build ycmd before testing' )
+  parser.add_argument( '--coverage', action = 'store_true',
+                       help = 'Enable coverage report' )
+  parser.add_argument( '--no-flake8', action = 'store_true',
+                       help = 'Do not run flake8' )
 
-  return parser.parse_args()
+  parsed_args, nosetests_args = parser.parse_known_args()
+
+  if 'COVERAGE' in os.environ:
+    parsed_args.coverage = ( os.environ[ 'COVERAGE' ] == 'true' )
+
+  return parsed_args, nosetests_args
 
 
 def BuildYcmdLibs( args ):
@@ -49,19 +70,33 @@ def BuildYcmdLibs( args ):
     ] )
 
 
-def NoseTests():
-  subprocess.check_call( [
-    'nosetests',
-    '-v',
-    p.join( DIR_OF_THIS_SCRIPT, 'python' )
-  ] )
+def NoseTests( parsed_args, extra_nosetests_args ):
+  # Always passing --with-id to nosetests enables non-surprising usage of
+  # its --failed flag.
+  nosetests_args = [ '-v', '--with-id' ]
+
+  if parsed_args.coverage:
+    nosetests_args += [ '--with-coverage',
+                        '--cover-erase',
+                        '--cover-package=ycm',
+                        '--cover-html' ]
+
+  if extra_nosetests_args:
+    nosetests_args.extend( extra_nosetests_args )
+  else:
+    nosetests_args.append( p.join( DIR_OF_THIS_SCRIPT, 'python' ) )
+
+  subprocess.check_call( [ sys.executable,
+                           # __main__ is required on Python 2.6.
+                           '-m', 'nose.__main__' ] + nosetests_args )
 
 
 def Main():
-  parsed_args = ParseArguments()
-  RunFlake8()
+  ( parsed_args, nosetests_args ) = ParseArguments()
+  if not parsed_args.no_flake8:
+    RunFlake8()
   BuildYcmdLibs( parsed_args )
-  NoseTests()
+  NoseTests( parsed_args, nosetests_args )
 
 if __name__ == "__main__":
   Main()
